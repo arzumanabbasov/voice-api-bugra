@@ -9,19 +9,14 @@ from datetime import timedelta
 from werkzeug.utils import secure_filename
 from pydub import AudioSegment
 from io import BytesIO
-"""
-add the embedings to return
-"""
 
 
 app = Flask(__name__)
 
-# Set up the Whisper model
 print("Loading Whisper model...")
 model = whisper.load_model("tiny")
 print("Whisper model loaded.")
 
-# Directory for saving uploaded files
 UPLOAD_FOLDER = 'uploads'
 OUTPUT_FOLDER = 'splitted_voices'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -30,19 +25,28 @@ os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 
-# Function to convert seconds to HH:MM:SS format
 def seconds_to_time_format(seconds):
     return str(timedelta(seconds=seconds))
 
 
-# Function to split and transcribe the audio
 def split_and_transcribe_audio(file_path, target_duration=15):
+    """
+    This function splits an audio file into smaller segments based on the target duration and transcribes each segment using the Whisper model.
+    The function returns a list of dictionaries, where each dictionary contains information about each segment, including the start time, end time, duration, transcribed text, and the filename of the segment audio file.
+
+    Args:
+        file_path (str): The path to the audio file to be split and transcribed.
+        target_duration (int): The target duration (in seconds) for each segment.
+
+    Returns:
+        list: A list of dictionaries containing information about each segment, including the start time, end time, duration, transcribed text, and the filename of the segment audio file.
+    """
+
     print(f"Processing file: {file_path}")
     audio, sr = librosa.load(file_path, sr=16000)
     total_duration = librosa.get_duration(y=audio, sr=sr)
     print(f"Total duration of the audio: {total_duration:.2f} seconds")
 
-    # Whisper transcription
     print("Transcribing audio using Whisper...")
     result = model.transcribe(file_path, language="en", word_timestamps=True)
     print(f"Transcription completed with {len(result['segments'])} segments.")
@@ -58,7 +62,6 @@ def split_and_transcribe_audio(file_path, target_duration=15):
         duration = end - start
         print(f"Processing segment {segment_count + 1}: Start = {start:.2f}, End = {end:.2f}, Duration = {duration:.2f} seconds")
 
-        # If adding this segment exceeds the max target duration, save the current segment
         if current_duration + duration > target_duration and current_segment:
             segment_count += 1
             output_filename = f"part_{segment_count:03d}.wav"
@@ -86,7 +89,6 @@ def split_and_transcribe_audio(file_path, target_duration=15):
             current_segment.append(segment)
             current_duration += duration
 
-    # Save last segment
     if current_segment:
         segment_count += 1
         output_filename = f"part_{segment_count:03d}.wav"
@@ -112,9 +114,19 @@ def split_and_transcribe_audio(file_path, target_duration=15):
     return segments
 
 
-# Route to handle file upload and processing
 @app.route('/upload', methods=['POST'])
 def upload_audio():
+    """
+    This function receives an audio file, splits it into smaller segments, and transcribes each segment using the Whisper model. 
+    The function returns a JSON response with information about each segment, including the start time, end time, duration, and transcribed text.
+
+    The audio file should be uploaded as a multipart form request with the file field containing the audio file.
+
+    Returns:
+        JSON: A JSON response containing information about each segment, including the start time, end time
+        duration, transcribed text, and the filename of the segment audio file. 
+    """
+    
     print("Received upload request...")
     if 'file' not in request.files:
         print("No file part in the request.")
@@ -130,10 +142,7 @@ def upload_audio():
     file.save(file_path)
 
     try:
-        # Process the uploaded audio file
         segments = split_and_transcribe_audio(file_path)
-
-        # Return segments information as JSON
         print("Returning segments information.")
         return jsonify(segments)
     except Exception as e:
@@ -143,4 +152,4 @@ def upload_audio():
 
 if __name__ == "__main__":
     print("Starting Flask app...")
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5000)
