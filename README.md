@@ -17,7 +17,7 @@
 
 #### **Step 2: Create and Activate a Virtual Environment**
 
-**Linux:**
+**Linux\Mac:**
 1. Create a virtual environment:
    ```bash
    python3 -m venv venv
@@ -56,7 +56,7 @@
 **Why FFmpeg is Needed:**
 The `pydub` library uses FFmpeg for audio processing. While it's not mandatory for the basic transcription functionality, you may encounter errors if FFmpeg is not installed.
 
-**Linux:**
+**Linux\Mac:**
 1. Install FFmpeg using your package manager:
    ```bash
    sudo apt update
