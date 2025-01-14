@@ -9,7 +9,7 @@ from datetime import timedelta
 from werkzeug.utils import secure_filename
 from pydub import AudioSegment
 from io import BytesIO
-
+import torch
 
 app = Flask(__name__)
 
@@ -24,24 +24,16 @@ os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+print(f"Using device: {device}")
+
+if device != 'cuda':
+    print("Warning: GPU is not available. The application will run on the CPU, which may result in slower performance.")
 
 def seconds_to_time_format(seconds):
     return str(timedelta(seconds=seconds))
 
-
 def split_and_transcribe_audio(file_path, target_duration=15):
-    """
-    This function splits an audio file into smaller segments based on the target duration and transcribes each segment using the Whisper model.
-    The function returns a list of dictionaries, where each dictionary contains information about each segment, including the start time, end time, duration, transcribed text, and the filename of the segment audio file.
-
-    Args:
-        file_path (str): The path to the audio file to be split and transcribed.
-        target_duration (int): The target duration (in seconds) for each segment.
-
-    Returns:
-        list: A list of dictionaries containing information about each segment, including the start time, end time, duration, transcribed text, and the filename of the segment audio file.
-    """
-
     print(f"Processing file: {file_path}")
     audio, sr = librosa.load(file_path, sr=16000)
     total_duration = librosa.get_duration(y=audio, sr=sr)
@@ -56,6 +48,8 @@ def split_and_transcribe_audio(file_path, target_duration=15):
     current_duration = 0
     segment_count = 0
 
+    original_title = Path(file_path).stem
+
     for segment in result["segments"]:
         start = segment["start"]
         end = segment["end"]
@@ -64,7 +58,7 @@ def split_and_transcribe_audio(file_path, target_duration=15):
 
         if current_duration + duration > target_duration and current_segment:
             segment_count += 1
-            output_filename = f"part_{segment_count:03d}.wav"
+            output_filename = f"{original_title}_part_{segment_count:03d}.wav"
             output_path = Path(OUTPUT_FOLDER) / output_filename
 
             start_sample = int(current_segment[0]["start"] * sr)
@@ -91,7 +85,7 @@ def split_and_transcribe_audio(file_path, target_duration=15):
 
     if current_segment:
         segment_count += 1
-        output_filename = f"part_{segment_count:03d}.wav"
+        output_filename = f"{original_title}_part_{segment_count:03d}.wav"
         output_path = Path(OUTPUT_FOLDER) / output_filename
 
         start_sample = int(current_segment[0]["start"] * sr)
@@ -113,20 +107,8 @@ def split_and_transcribe_audio(file_path, target_duration=15):
     print(f"Total segments created: {len(segments)}")
     return segments
 
-
 @app.route('/upload', methods=['POST'])
 def upload_audio():
-    """
-    This function receives an audio file, splits it into smaller segments, and transcribes each segment using the Whisper model. 
-    The function returns a JSON response with information about each segment, including the start time, end time, duration, and transcribed text.
-
-    The audio file should be uploaded as a multipart form request with the file field containing the audio file.
-
-    Returns:
-        JSON: A JSON response containing information about each segment, including the start time, end time
-        duration, transcribed text, and the filename of the segment audio file. 
-    """
-    
     print("Received upload request...")
     if 'file' not in request.files:
         print("No file part in the request.")
@@ -148,7 +130,6 @@ def upload_audio():
     except Exception as e:
         print(f"Error processing the file: {e}")
         return jsonify({'error': str(e)}), 500
-
 
 if __name__ == "__main__":
     print("Starting Flask app...")
